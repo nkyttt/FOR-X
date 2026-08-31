@@ -1,0 +1,6 @@
+{
+  "name": "CYBERX",
+  "description": "Next-Gen Gaming Platform, Community, Tournaments, Videos, and E-Commerce Store.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
