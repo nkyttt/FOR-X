@@ -1,0 +1,139 @@
+{
+  "entities": {
+    "category": {
+      "title": "Category",
+      "description": "Storefront product category",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "iconKey": { "type": "string", "maxLength": 50 },
+        "description": { "type": "string", "maxLength": 500 },
+        "displayOrder": { "type": "number" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "active"]
+    },
+    "product": {
+      "title": "Product",
+      "description": "Storefront product with affiliate Buy Now link",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "price": { "type": "number" },
+        "rating": { "type": "number" },
+        "categoryId": { "type": "string" },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "affiliateLink": { "type": "string", "maxLength": 1000 },
+        "active": { "type": "boolean" },
+        "featured": { "type": "boolean" },
+        "displayOrder": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "description", "price", "rating", "categoryId", "imageUrl", "affiliateLink", "active"]
+    },
+    "video": {
+      "title": "StoreVideo",
+      "description": "Promotional or gameplay video asset",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "videoUrl": { "type": "string", "maxLength": 1000 },
+        "thumbnailUrl": { "type": "string", "maxLength": 1000 },
+        "active": { "type": "boolean" },
+        "featured": { "type": "boolean" },
+        "displayOrder": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "videoUrl", "active"]
+    },
+    "banner": {
+      "title": "Banner",
+      "description": "Storefront promotional banner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "subtitle": { "type": "string", "maxLength": 500 },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "ctaText": { "type": "string", "maxLength": 100 },
+        "ctaUrl": { "type": "string", "maxLength": 500 },
+        "active": { "type": "boolean" },
+        "displayOrder": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "imageUrl", "active"]
+    },
+    "storeSettings": {
+      "title": "StoreSettings",
+      "description": "Storefront metadata, contact, and maintenance mode configuration",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string", "maxLength": 100 },
+        "logoUrl": { "type": "string", "maxLength": 1000 },
+        "faviconUrl": { "type": "string", "maxLength": 1000 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "contactEmail": { "type": "string", "maxLength": 100 },
+        "contactPhone": { "type": "string", "maxLength": 50 },
+        "footerText": { "type": "string", "maxLength": 500 },
+        "currency": { "type": "string", "maxLength": 10 },
+        "maintenanceMode": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["storeName"]
+    },
+    "themeSettings": {
+      "title": "ThemeSettings",
+      "description": "Storefront visual appearance and theme customization",
+      "type": "object",
+      "properties": {
+        "primaryColor": { "type": "string", "maxLength": 30 },
+        "secondaryColor": { "type": "string", "maxLength": 30 },
+        "accentColor": { "type": "string", "maxLength": 30 },
+        "backgroundColor": { "type": "string", "maxLength": 30 },
+        "textColor": { "type": "string", "maxLength": 30 },
+        "borderRadius": { "type": "string", "maxLength": 20 },
+        "buttonStyle": { "type": "string", "maxLength": 20 },
+        "cardStyle": { "type": "string", "maxLength": 20 },
+        "appearance": { "type": "string", "maxLength": 20 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["primaryColor", "secondaryColor", "appearance"]
+    }
+  },
+  "firestore": {
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "category" },
+      "description": "Collection of storefront product categories"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "product" },
+      "description": "Collection of storefront products"
+    },
+    "/videos/{videoId}": {
+      "schema": { "$ref": "video" },
+      "description": "Collection of promotional and store videos"
+    },
+    "/banners/{bannerId}": {
+      "schema": { "$ref": "banner" },
+      "description": "Collection of homepage promotional banners"
+    },
+    "/storeSettings/{document}": {
+      "schema": { "$ref": "storeSettings" },
+      "description": "Singleton store settings configuration document"
+    },
+    "/themeSettings/{document}": {
+      "schema": { "$ref": "themeSettings" },
+      "description": "Singleton theme settings configuration document"
+    }
+  }
+}
