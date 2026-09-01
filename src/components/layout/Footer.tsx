@@ -1,13 +1,63 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { ShieldCheck, MessageSquare, Twitter, Youtube, Instagram, Disc as Discord } from 'lucide-react';
+import { ShieldCheck, MessageSquare, Twitter, Youtube, Instagram, Disc as Discord, Sparkles, MessageCircle } from 'lucide-react';
 
 export const Footer: React.FC = () => {
-  const { navigate, siteSettings, playUiSound } = useApp();
+  const {
+    navigate,
+    siteSettings,
+    playUiSound,
+    isMiniChatOpen,
+    setIsMiniChatOpen,
+    setIsMiniChatMinimized,
+    globalChatMessages,
+  } = useApp();
+
+  const latestMsg = globalChatMessages[globalChatMessages.length - 1];
 
   return (
     <footer className="w-full bg-white border-t border-slate-200/80 py-10 mt-16 text-slate-600">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Global Community Chat Quick Connect Banner */}
+        <div className="mb-8 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg border border-indigo-900/50">
+          <div className="flex items-center gap-3 text-center sm:text-left">
+            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-blue-600/30 text-blue-400 border border-blue-500/40 flex-shrink-0">
+              <MessageCircle className="w-5 h-5" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center justify-center sm:justify-start gap-2 font-bold text-sm text-slate-100">
+                <span>CYBERX Global Community Chat</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono border border-emerald-500/30">
+                  142 GAMERS LIVE
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                {latestMsg ? (
+                  <span>
+                    <strong className="text-slate-300">@{latestMsg.username}:</strong> {latestMsg.content}
+                  </span>
+                ) : (
+                  'Connect with gamers, find squads for tournaments, and share gear reviews.'
+                )}
+              </p>
+            </div>
+          </div>
+
+          <button
+            id="btn-footer-open-minichat"
+            onClick={() => {
+              playUiSound('click');
+              setIsMiniChatOpen(true);
+              setIsMiniChatMinimized(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-md shadow-blue-600/30 whitespace-nowrap hover:scale-105 active:scale-95"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>{isMiniChatOpen ? 'Focus Lobby Chat' : 'Open Mini-Chat'}</span>
+          </button>
+        </div>
+
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 border-b border-slate-100">
           {/* Brand & Copyright */}
           <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">

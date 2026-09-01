@@ -19,6 +19,8 @@ import {
   NavItem,
   AnnouncementItem,
   MediaItem,
+  GlobalChatMessage,
+  ChatChannel,
 } from '../types';
 import {
   SEED_GAMES,
@@ -38,8 +40,10 @@ import {
   SEED_ANNOUNCEMENTS,
   SEED_NAVIGATION,
   SEED_MEDIA_ITEMS,
+  SEED_GLOBAL_CHAT_MESSAGES,
 } from '../data/seedData';
 import { db } from '../lib/firebase';
+import { handleFirestoreError, OperationType } from '../lib/firestoreError';
 import {
   collection,
   doc,
@@ -225,7 +229,24 @@ interface AppContextType {
   addAuditLog: (action: string, target: string, details: string, email?: string) => void;
   soundEnabled: boolean;
   setSoundEnabled: (enabled: boolean) => void;
-  playUiSound: (type?: 'click' | 'success' | 'claim' | 'laser') => void;
+  playUiSound: (type?: 'click' | 'success' | 'claim' | 'laser' | 'pop' | 'message') => void;
+
+  // Global Gaming Mini Chat
+  isMiniChatOpen: boolean;
+  setIsMiniChatOpen: (open: boolean) => void;
+  isMiniChatMinimized: boolean;
+  setIsMiniChatMinimized: (minimized: boolean) => void;
+  chatChannel: ChatChannel;
+  setChatChannel: (channel: ChatChannel) => void;
+  globalChatMessages: GlobalChatMessage[];
+  sendGlobalChatMessage: (
+    content: string,
+    channel?: ChatChannel,
+    senderProfile?: { id: string; username: string; displayName: string; avatarUrl: string; role?: string; level?: number; badge?: string }
+  ) => Promise<boolean>;
+  reactToGlobalChatMessage: (messageId: string, emoji: string) => Promise<void>;
+  unreadChatCount: number;
+  resetUnreadChatCount: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -375,7 +396,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  // Global Gaming Mini Chat States
+  const [isMiniChatOpen, setIsMiniChatOpen] = useState(false);
+  const [isMiniChatMinimized, setIsMiniChatMinimized] = useState(false);
+  const [chatChannel, setChatChannel] = useState<ChatChannel>('general');
+  const [globalChatMessages, setGlobalChatMessages] = useState<GlobalChatMessage[]>(() => {
+    const saved = localStorage.getItem('cyberx_global_chat_messages');
+    return saved ? JSON.parse(saved) : SEED_GLOBAL_CHAT_MESSAGES;
+  });
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+
+  const resetUnreadChatCount = () => {
+    setUnreadChatCount(0);
+  };
+
   // Local Storage Synchronizations
+  useEffect(() => {
+    localStorage.setItem('cyberx_global_chat_messages', JSON.stringify(globalChatMessages));
+  }, [globalChatMessages]);
   useEffect(() => {
     localStorage.setItem('cyberx_categories', JSON.stringify(categories));
   }, [categories]);
@@ -514,6 +552,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       );
 
+      const unsubChat = onSnapshot(
+        collection(db, 'global_chat_messages'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const items = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as GlobalChatMessage));
+            items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+            setGlobalChatMessages(items);
+          }
+        },
+        (error) => {
+          console.warn('Firestore global_chat_messages sync offline/skipped:', error.message);
+        }
+      );
+
       return () => {
         unsubCategories();
         unsubProducts();
@@ -521,6 +573,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubBanners();
         unsubStoreSettings();
         unsubThemeSettings();
+        unsubChat();
       };
     } catch (e) {
       console.warn('Firestore initialization error:', e);
@@ -543,7 +596,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const playUiSound = (type: 'click' | 'success' | 'claim' | 'laser' = 'click') => {
+  const playUiSound = (type: 'click' | 'success' | 'claim' | 'laser' | 'pop' | 'message' = 'click') => {
     if (!soundEnabled) return;
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -577,6 +630,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
         osc.start();
         osc.stop(ctx.currentTime + 0.12);
+      } else if (type === 'pop') {
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.04);
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.04);
+      } else if (type === 'message') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.2);
       }
     } catch {}
   };
@@ -1126,6 +1194,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
   };
 
+  const sendGlobalChatMessage = async (
+    content: string,
+    targetChannel: ChatChannel = chatChannel,
+    senderProfile?: { id: string; username: string; displayName: string; avatarUrl: string; role?: string; level?: number; badge?: string }
+  ): Promise<boolean> => {
+    if (!content.trim()) return false;
+    const id = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newMsg: GlobalChatMessage = {
+      id,
+      userId: senderProfile?.id || 'usr_cyber_ace',
+      username: senderProfile?.username || 'CyberAce_99',
+      displayName: senderProfile?.displayName || 'Neo Stryker',
+      avatarUrl: senderProfile?.avatarUrl || 'https://api.dicebear.com/7.x/bottts/svg?seed=CyberAce',
+      role: senderProfile?.role || 'USER',
+      userLevel: senderProfile?.level || 18,
+      badge: senderProfile?.badge || (senderProfile?.role === 'OWNER' || senderProfile?.role === 'ADMIN' ? 'STAFF' : 'CYBER PRO'),
+      content: content.trim(),
+      channel: targetChannel,
+      reactions: {},
+      createdAt: new Date().toISOString(),
+    };
+
+    setGlobalChatMessages((prev) => [...prev, newMsg]);
+    playUiSound('message');
+
+    try {
+      if (db) {
+        await setDoc(doc(db, 'global_chat_messages', id), newMsg);
+      }
+    } catch (err) {
+      console.warn('Firestore message write queued locally:', err);
+    }
+    return true;
+  };
+
+  const reactToGlobalChatMessage = async (messageId: string, emoji: string) => {
+    playUiSound('pop');
+    let updatedMsg: GlobalChatMessage | undefined;
+
+    setGlobalChatMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id === messageId) {
+          const currentReactions = { ...(msg.reactions || {}) };
+          currentReactions[emoji] = (currentReactions[emoji] || 0) + 1;
+          updatedMsg = { ...msg, reactions: currentReactions };
+          return updatedMsg;
+        }
+        return msg;
+      })
+    );
+
+    try {
+      if (db && updatedMsg) {
+        await updateDoc(doc(db, 'global_chat_messages', messageId), {
+          reactions: updatedMsg.reactions,
+        });
+      }
+    } catch (e) {
+      console.warn('Firestore reaction update stored in local state:', e);
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1170,6 +1300,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toasts,
         showToast,
         removeToast,
+        // Global Gaming Mini Chat
+        isMiniChatOpen,
+        setIsMiniChatOpen,
+        isMiniChatMinimized,
+        setIsMiniChatMinimized,
+        chatChannel,
+        setChatChannel,
+        globalChatMessages,
+        sendGlobalChatMessage,
+        reactToGlobalChatMessage,
+        unreadChatCount,
+        resetUnreadChatCount,
         categories,
         setCategories,
         addCategory,

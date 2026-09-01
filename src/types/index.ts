@@ -400,3 +400,21 @@ export interface SiteSettings {
   totalGamesCount: number;
   totalTournamentsCount: number;
 }
+
+export type ChatChannel = 'general' | 'lfg' | 'gear' | 'esports';
+
+export interface GlobalChatMessage {
+  id: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string;
+  role?: UserRole | string;
+  userLevel?: number;
+  badge?: string;
+  content: string;
+  channel: ChatChannel;
+  reactions?: Record<string, number>;
+  createdAt: string;
+  isSystem?: boolean;
+}

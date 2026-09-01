@@ -9,6 +9,7 @@ import { Footer } from './components/layout/Footer';
 import { CartDrawer } from './components/layout/CartDrawer';
 import { LiveSearchModal } from './components/layout/LiveSearchModal';
 import { ToastContainer } from './components/layout/ToastContainer';
+import { GlobalMiniChat } from './components/chat/GlobalMiniChat';
 
 // Modals
 import { VideoPlayerModal } from './components/videos/VideoPlayerModal';
@@ -111,6 +112,7 @@ const MainContent: React.FC = () => {
       </button>
 
       {/* Global Overlays & Modals */}
+      <GlobalMiniChat />
       <LiveSearchModal />
       <CartDrawer />
       <VideoPlayerModal />
