@@ -1,5 +1,5 @@
-import React from 'react';
-import { AuthProvider } from './context/AuthContext';
+import React, { useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { AppProvider, useApp } from './context/AppContext';
 
@@ -19,6 +19,8 @@ import { AIAssistantModal } from './components/ai/AIAssistantModal';
 import { AuthModal } from './components/auth/AuthModal';
 
 // Views
+import { AuthView } from './views/AuthView';
+import { AuthLoadingScreen } from './components/auth/AuthLoadingScreen';
 import { HomeView } from './views/HomeView';
 import { GamesView } from './views/GamesView';
 import { VideosView } from './views/VideosView';
@@ -37,11 +39,36 @@ import { SearchResultsView } from './views/SearchResultsView';
 import { Sparkles, BrainCircuit } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { currentView, activeRoute, setIsAIAssistantOpen, playUiSound } = useApp();
+  const { currentUser, loading: authLoading } = useAuth();
+  const { currentView, activeRoute, navigate, setIsAIAssistantOpen, playUiSound } = useApp();
 
   const viewName = activeRoute?.name || currentView || 'home';
 
-  // Dedicated Full-Console rendering for Admin Panel
+  // If user is authenticated and attempts to view /auth, automatically skip to the main website
+  useEffect(() => {
+    if (currentUser && viewName === 'auth') {
+      navigate('home');
+    }
+  }, [currentUser, viewName, navigate]);
+
+  // 1. Initial Auth Loading State - Verify security credentials
+  if (authLoading) {
+    return <AuthLoadingScreen />;
+  }
+
+  // 2. REAL AUTHENTICATION GATE:
+  // If unauthenticated, user MUST see AuthView (Sign In / Sign Up).
+  // Strictly protects all private pages from unauthenticated access.
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-600 selection:text-white">
+        <AuthView />
+        <ToastContainer />
+      </div>
+    );
+  }
+
+  // 3. Dedicated Full-Console rendering for Admin Panel (Restricted to authorized staff)
   if (viewName === 'admin') {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-600 selection:text-white">
@@ -51,7 +78,7 @@ const MainContent: React.FC = () => {
     );
   }
 
-  // Dedicated Full-Page Modern Dark Social Experience for Community
+  // 4. Dedicated Full-Page Modern Dark Social Experience for Community
   if (viewName === 'community') {
     return (
       <div className="min-h-screen bg-[#0B0E14] text-slate-100 font-sans selection:bg-blue-600 selection:text-white">
@@ -95,6 +122,8 @@ const MainContent: React.FC = () => {
         return <SecurityView />;
       case 'search':
         return <SearchResultsView />;
+      case 'auth':
+        return <HomeView />;
       default:
         return <HomeView />;
     }
@@ -102,7 +131,7 @@ const MainContent: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans selection:bg-blue-600 selection:text-white">
-      {/* Global Navigation Header matching the design */}
+      {/* Global Navigation Header */}
       <Header />
 
       {/* Main Dynamic View Outlet */}

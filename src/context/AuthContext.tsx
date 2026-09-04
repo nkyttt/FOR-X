@@ -9,8 +9,11 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
+  sendPasswordResetEmail,
+  GoogleAuthProvider,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { getFirebaseAuthErrorMessage } from '../lib/authErrors';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -18,10 +21,16 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   googleAccessToken: string | null;
   loading: boolean;
-  login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  loginWithGoogle: () => Promise<boolean>;
-  loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  registerWithEmail: (name: string, username: string, email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, pass: string) => Promise<any>;
+  loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string; code?: string }>;
+  registerWithEmail: (
+    name: string,
+    username: string,
+    email: string,
+    pass: string
+  ) => Promise<{ success: boolean; error?: string; code?: string }>;
+  sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
   addXpAndPoints: (xp: number, points: number, reason?: string) => Promise<void>;
@@ -30,49 +39,18 @@ interface AuthContextType {
   switchDemoRole: (role: UserRole) => void;
 }
 
-const DEFAULT_DEMO_USER: UserProfile = {
-  id: 'usr_cyber_ace',
-  email: 'nkoffcil27@gmail.com',
-  username: 'CyberAce_99',
-  displayName: 'Neo Stryker',
-  avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=CyberAce',
-  role: 'OWNER',
-  level: 18,
-  xp: 4250,
-  nextLevelXp: 5000,
-  cyberPoints: 1450,
-  bio: 'Competitive esports player & game developer. Specializing in high-speed cyber racers and tactical FPS.',
-  favoriteGame: 'Cyber Strike',
-  badges: ['b-pioneer', 'b-striker', 'b-tournament-champ', 'b-collector'],
-  gamesLibrary: ['cyber-strike', 'neon-riders', 'shadow-legends'],
-  wishlist: ['quantum-siege', 'battle-arena'],
-  tournamentsJoined: ['cyber-clash-spring-2024'],
-  createdAt: '2024-01-15T10:00:00Z',
-  streakDays: 7,
-};
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('cyberx_user_profile');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return DEFAULT_DEMO_USER;
-      }
-    }
-    return DEFAULT_DEMO_USER;
-  });
-
+  // Real authenticated state starts as null - NO mock users or default demo logins
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(() => {
     return localStorage.getItem('cyberx_google_token');
   });
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Sync to local storage
+  // Sync authenticated user profile to local storage for quick offline retrieval if needed
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('cyberx_user_profile', JSON.stringify(currentUser));
@@ -81,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentUser]);
 
-  // Listen to Firebase Auth state
+  // Listen to REAL Firebase Auth state changes
   useEffect(() => {
     let unsubscribe = () => {};
     try {
@@ -95,147 +73,212 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const data = snap.data() as UserProfile;
               setCurrentUser(data);
             } else {
+              // Create brand new standard public user profile - strictly 'USER' role
+              const cleanUsername = (user.displayName || user.email?.split('@')[0] || 'player')
+                .toLowerCase()
+                .replace(/[^a-z0-9_]/g, '_')
+                .slice(0, 20);
+
               const newProfile: UserProfile = {
                 id: user.uid,
-                email: user.email || 'gamer@cyberx.gg',
-                username: user.displayName?.toLowerCase().replace(/\s+/g, '_') || 'cyber_agent',
-                displayName: user.displayName || 'Cyber Agent',
-                avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.uid}`,
-                role: user.email?.includes('admin') || user.email === 'nkoffcil27@gmail.com' ? 'OWNER' : 'USER',
-                level: 5,
-                xp: 1200,
-                nextLevelXp: 2000,
-                cyberPoints: 500,
-                bio: 'Welcome to CYBERX. Ready to dominate the grid.',
+                email: user.email || '',
+                username: cleanUsername,
+                displayName: user.displayName || 'CYBERX Gamer',
+                avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
+                role: 'USER', // Strictly USER for public signups; Admin roles remain distinct
+                level: 1,
+                xp: 100,
+                nextLevelXp: 1000,
+                cyberPoints: 200,
+                bio: 'Player on CYBERX Universe. Ready to dominate the grid.',
                 badges: ['b-pioneer'],
                 gamesLibrary: ['cyber-strike'],
-                wishlist: ['neon-riders'],
+                wishlist: [],
                 tournamentsJoined: [],
                 createdAt: new Date().toISOString(),
                 streakDays: 1,
               };
-              await setDoc(userRef, newProfile);
+
+              try {
+                await setDoc(userRef, newProfile);
+              } catch (writeErr) {
+                console.warn('Initial user profile write warning:', writeErr);
+              }
               setCurrentUser(newProfile);
             }
-          } catch (e) {
-            console.warn('Firestore fetch user fallback to state:', e);
+          } catch (fetchErr) {
+            console.warn('Firestore fetch user profile warning:', fetchErr);
+            // Fallback user profile for authenticated session
+            const fallbackProfile: UserProfile = {
+              id: user.uid,
+              email: user.email || '',
+              username: (user.displayName || user.email?.split('@')[0] || 'player').toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+              displayName: user.displayName || user.email?.split('@')[0] || 'Gamer',
+              avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
+              role: 'USER',
+              level: 1,
+              xp: 100,
+              nextLevelXp: 1000,
+              cyberPoints: 200,
+              badges: ['b-pioneer'],
+              gamesLibrary: ['cyber-strike'],
+              wishlist: [],
+              tournamentsJoined: [],
+              createdAt: new Date().toISOString(),
+              streakDays: 1,
+            };
+            setCurrentUser(fallbackProfile);
           }
+        } else {
+          setCurrentUser(null);
         }
         setLoading(false);
       });
-    } catch {
+    } catch (err) {
+      console.error('Firebase Auth listener error:', err);
       setLoading(false);
     }
     return () => unsubscribe();
   }, []);
 
-  const loginWithGoogle = async (): Promise<boolean> => {
+  // Standard throw-on-error login for admin console
+  const login = async (email: string, pass: string) => {
+    const res = await signInWithEmailAndPassword(auth, email.trim(), pass);
+    setFirebaseUser(res.user);
+    try {
+      const snap = await getDoc(doc(db, 'users', res.user.uid));
+      if (snap.exists()) {
+        setCurrentUser(snap.data() as UserProfile);
+      }
+    } catch {}
+    return res;
+  };
+
+  // Real Firebase Google Authentication
+  const loginWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      // @ts-ignore
       const credential = GoogleAuthProvider.credentialFromResult(result);
       const token = credential?.accessToken;
       if (token) {
         setGoogleAccessToken(token);
         localStorage.setItem('cyberx_google_token', token);
       }
-      return true;
+      setFirebaseUser(result.user);
+      return { success: true };
     } catch (error: any) {
       console.error('Google Sign-In Error:', error);
-      // If in sandbox iframe where popups are restricted, fall back gracefully to authenticated state
-      const fallbackUser: UserProfile = {
-        ...DEFAULT_DEMO_USER,
-        displayName: 'Google Verified Gamer',
-        role: 'OWNER',
-      };
-      setCurrentUser(fallbackUser);
-      return true;
+      const errorMessage = getFirebaseAuthErrorMessage(error);
+      return { success: false, error: errorMessage };
     }
   };
 
-  const loginWithEmail = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+  // Real Firebase Email/Password Sign In
+  const loginWithEmail = async (
+    email: string,
+    pass: string
+  ): Promise<{ success: boolean; error?: string; code?: string }> => {
     try {
-      const res = await signInWithEmailAndPassword(auth, email, pass);
+      const res = await signInWithEmailAndPassword(auth, email.trim(), pass);
+      setFirebaseUser(res.user);
+      try {
+        const snap = await getDoc(doc(db, 'users', res.user.uid));
+        if (snap.exists()) {
+          setCurrentUser(snap.data() as UserProfile);
+        }
+      } catch (docErr) {
+        console.warn('Doc fetch warning:', docErr);
+      }
+      return { success: true };
+    } catch (err: any) {
+      console.error('Firebase Email Sign In Error:', err);
+      const errorMessage = getFirebaseAuthErrorMessage(err);
+      return { success: false, error: errorMessage, code: err?.code };
+    }
+  };
+
+  // Real Firebase Email/Password Registration
+  const registerWithEmail = async (
+    name: string,
+    username: string,
+    email: string,
+    pass: string
+  ): Promise<{ success: boolean; error?: string; code?: string }> => {
+    try {
+      const res = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+      await updateProfile(res.user, { displayName: name.trim() });
+
+      const cleanUsername = (username || name || email.split('@')[0])
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_')
+        .slice(0, 20);
+
+      // Public Sign Up ALWAYS creates standard 'USER' role - never Admin
+      const newProfile: UserProfile = {
+        id: res.user.uid,
+        email: email.trim(),
+        username: cleanUsername,
+        displayName: name.trim(),
+        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanUsername)}`,
+        role: 'USER', // Strictly USER for public accounts
+        level: 1,
+        xp: 100,
+        nextLevelXp: 1000,
+        cyberPoints: 200,
+        bio: 'Welcome to CYBERX. Ready to dominate the grid.',
+        badges: ['b-pioneer'],
+        gamesLibrary: ['cyber-strike'],
+        wishlist: [],
+        tournamentsJoined: [],
+        createdAt: new Date().toISOString(),
+        streakDays: 1,
+      };
+
+      try {
+        await setDoc(doc(db, 'users', res.user.uid), newProfile);
+      } catch (writeErr) {
+        console.warn('Could not write profile to Firestore:', writeErr);
+      }
+
+      setCurrentUser(newProfile);
       setFirebaseUser(res.user);
       return { success: true };
     } catch (err: any) {
-      console.warn('Firebase Email Login fallback for demo environment:', err.message);
-      // Demo simulated login
-      const profile: UserProfile = {
-        ...DEFAULT_DEMO_USER,
-        email,
-        displayName: email.split('@')[0],
-        username: email.split('@')[0],
-        role: email.includes('admin') ? 'ADMIN' : 'USER',
-      };
-      setCurrentUser(profile);
-      return { success: true };
+      console.error('Firebase Email Registration Error:', err);
+      const errorMessage = getFirebaseAuthErrorMessage(err);
+      return { success: false, error: errorMessage, code: err?.code };
     }
   };
 
-  const registerWithEmail = async (name: string, username: string, email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+  // Real Firebase Password Reset Email
+  const sendPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const res = await createUserWithEmailAndPassword(auth, email, pass);
-      await updateProfile(res.user, { displayName: name });
-      const newProfile: UserProfile = {
-        id: res.user.uid,
-        email,
-        username,
-        displayName: name,
-        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`,
-        role: email.includes('admin') ? 'ADMIN' : 'USER',
-        level: 1,
-        xp: 100,
-        nextLevelXp: 1000,
-        cyberPoints: 200,
-        bio: `New player on CYBERX. Let's play!`,
-        badges: ['b-pioneer'],
-        gamesLibrary: ['cyber-strike'],
-        wishlist: [],
-        tournamentsJoined: [],
-        createdAt: new Date().toISOString(),
-        streakDays: 1,
-      };
-      try {
-        await setDoc(doc(db, 'users', res.user.uid), newProfile);
-      } catch {}
-      setCurrentUser(newProfile);
+      await sendPasswordResetEmail(auth, email.trim());
       return { success: true };
     } catch (err: any) {
-      console.warn('Firebase registration fallback for demo environment:', err.message);
-      const newProfile: UserProfile = {
-        id: `user_${Date.now()}`,
-        email,
-        username,
-        displayName: name,
-        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`,
-        role: 'USER',
-        level: 1,
-        xp: 100,
-        nextLevelXp: 1000,
-        cyberPoints: 200,
-        bio: `New player on CYBERX. Let's play!`,
-        badges: ['b-pioneer'],
-        gamesLibrary: ['cyber-strike'],
-        wishlist: [],
-        tournamentsJoined: [],
-        createdAt: new Date().toISOString(),
-        streakDays: 1,
-      };
-      setCurrentUser(newProfile);
-      return { success: true };
+      console.error('Firebase Password Reset Error:', err);
+      const errorMessage = getFirebaseAuthErrorMessage(err);
+      return { success: false, error: errorMessage };
     }
   };
 
+  // Real Firebase Sign Out
   const logout = async () => {
     try {
       await firebaseSignOut(auth);
-    } catch {}
+    } catch (err) {
+      console.error('Firebase SignOut Error:', err);
+    }
     setFirebaseUser(null);
     setCurrentUser(null);
     setGoogleAccessToken(null);
     localStorage.removeItem('cyberx_google_token');
     localStorage.removeItem('cyberx_user_profile');
+
+    // Immediately route to /auth as required
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', '/auth');
+    }
   };
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
@@ -307,8 +350,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const switchDemoRole = (role: UserRole) => {
     if (currentUser) {
       setCurrentUser({ ...currentUser, role });
-    } else {
-      setCurrentUser({ ...DEFAULT_DEMO_USER, role });
     }
   };
 
@@ -320,10 +361,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         firebaseUser,
         googleAccessToken,
         loading,
-        login: loginWithEmail,
+        login,
         loginWithGoogle,
         loginWithEmail,
         registerWithEmail,
+        sendPasswordReset,
         logout,
         updateUserProfile,
         addXpAndPoints,

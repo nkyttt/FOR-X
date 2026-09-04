@@ -1,65 +1,101 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { X, Mail, Lock, User, ArrowRight, Sparkles } from 'lucide-react';
+import { X, Mail, Lock, User, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setIsAuthModalOpen, authModalMode, setAuthModalMode, playUiSound, showToast } =
     useApp();
-  const { loginWithGoogle, loginWithEmail, registerWithEmail } = useAuth();
+  const { loginWithGoogle, loginWithEmail, registerWithEmail, sendPasswordReset } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   if (!isAuthModalOpen) return null;
 
   const handleGoogleAuth = async () => {
     setLoading(true);
+    setModalError(null);
     playUiSound('click');
-    const success = await loginWithGoogle();
+    const res = await loginWithGoogle();
     setLoading(false);
-    if (success) {
+    if (res.success) {
       playUiSound('success');
-      showToast('Welcome!', 'Successfully signed in with Google');
+      showToast('Welcome!', 'Successfully authenticated with Google account');
       setIsAuthModalOpen(false);
+    } else {
+      playUiSound('pop');
+      setModalError(res.error || 'Google authentication could not be completed.');
     }
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    setModalError(null);
+
+    if (!email.trim()) {
+      setModalError('Please enter your email address.');
+      return;
+    }
 
     setLoading(true);
     playUiSound('click');
 
     if (authModalMode === 'login') {
+      if (!password) {
+        setModalError('Please enter your password.');
+        setLoading(false);
+        return;
+      }
       const res = await loginWithEmail(email, password);
       setLoading(false);
       if (res.success) {
         playUiSound('success');
-        showToast('Welcome back!', `Logged in as ${email}`);
+        showToast('Welcome back!', `Signed in as ${email}`);
         setIsAuthModalOpen(false);
+      } else {
+        playUiSound('pop');
+        setModalError(res.error || 'Failed to sign in.');
       }
     } else if (authModalMode === 'register') {
-      const res = await registerWithEmail(
-        displayName || email.split('@')[0],
-        username || email.split('@')[0],
-        email,
-        password
-      );
+      if (!password) {
+        setModalError('Please enter your password.');
+        setLoading(false);
+        return;
+      }
+      if (password.length < 6) {
+        setModalError('Password must be at least 6 characters long.');
+        setLoading(false);
+        return;
+      }
+      const nameVal = displayName.trim() || email.split('@')[0];
+      const userVal = username.trim() || nameVal.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      const res = await registerWithEmail(nameVal, userVal, email, password);
       setLoading(false);
       if (res.success) {
         playUiSound('success');
         showToast('Account Created!', 'Welcome to the CYBERX Gaming Universe');
         setIsAuthModalOpen(false);
+      } else {
+        playUiSound('pop');
+        setModalError(res.error || 'Failed to create account.');
       }
     } else {
+      // Forgot Password mode
+      const res = await sendPasswordReset(email);
       setLoading(false);
-      showToast('Password Reset', 'Password reset instructions dispatched to your email', 'info');
-      setAuthModalMode('login');
+      if (res.success) {
+        playUiSound('success');
+        showToast('Password Reset', 'Password recovery instructions dispatched to your email', 'info');
+        setAuthModalMode('login');
+      } else {
+        playUiSound('pop');
+        setModalError(res.error || 'Could not dispatch password reset link.');
+      }
     }
   };
 
@@ -74,35 +110,43 @@ export const AuthModal: React.FC = () => {
           <X className="w-5 h-5" />
         </button>
 
-        {/* Brand Header */}
+        {/* Modal Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 text-white font-black text-2xl mb-3 shadow-lg shadow-blue-500/20">
-            X
+          <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+            <Sparkles className="w-6 h-6" />
           </div>
-          <h2 className="text-2xl font-black text-slate-900">
+          <h2 className="text-xl font-black text-slate-900">
             {authModalMode === 'login'
-              ? 'Sign in to CYBERX'
+              ? 'Sign In to CYBERX'
               : authModalMode === 'register'
-              ? 'Join CYBERX Universe'
+              ? 'Create Your Account'
               : 'Reset Password'}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             {authModalMode === 'login'
-              ? 'Access your cloud saves, esports tournaments, and gear orders'
+              ? 'Enter your credentials to access your games library & stats.'
               : authModalMode === 'register'
-              ? 'Create your gamer profile and claim early access rewards'
-              : 'Enter your email to receive recovery instructions'}
+              ? 'Join tournaments, earn cyber points, and climb the leaderboard.'
+              : 'Enter your email address to receive password recovery instructions.'}
           </p>
         </div>
 
-        {/* Google Sign-in Button */}
+        {/* Error Banner */}
+        {modalError && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+            <span className="font-medium">{modalError}</span>
+          </div>
+        )}
+
+        {/* Google One-Click Button */}
         {authModalMode !== 'forgot' && (
-          <div className="space-y-4 mb-6">
+          <>
             <button
               type="button"
               onClick={handleGoogleAuth}
               disabled={loading}
-              className="w-full py-3 px-4 bg-white hover:bg-slate-50 border border-slate-300 rounded-2xl font-bold text-xs text-slate-700 shadow-xs hover:shadow-md transition flex items-center justify-center gap-3"
+              className="w-full py-3 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl font-bold text-xs text-slate-700 transition flex items-center justify-center gap-3 shadow-xs"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
@@ -125,15 +169,15 @@ export const AuthModal: React.FC = () => {
               <span>Continue with Google</span>
             </button>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 my-4">
               <div className="flex-1 h-px bg-slate-200" />
-              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">or with email</span>
+              <span className="text-[10px] uppercase font-bold text-slate-400">or with email</span>
               <div className="flex-1 h-px bg-slate-200" />
             </div>
-          </div>
+          </>
         )}
 
-        {/* Email/Password Form */}
+        {/* Email & Password Form */}
         <form onSubmit={handleEmailAuth} className="space-y-3.5">
           {authModalMode === 'register' && (
             <>
@@ -146,22 +190,22 @@ export const AuthModal: React.FC = () => {
                     required
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="e.g. Alex Stryker"
+                    placeholder="Gamer Tag / Name"
                     className="w-full bg-slate-50 text-xs pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
+
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Username / Gamertag</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Username</label>
                 <div className="relative">
-                  <span className="text-slate-400 font-bold text-xs absolute left-3.5 top-2.5">@</span>
+                  <span className="text-slate-400 font-bold absolute left-3.5 top-2.5 text-xs">@</span>
                   <input
                     type="text"
-                    required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="gamertag_99"
-                    className="w-full bg-slate-50 text-xs pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="username"
+                    className="w-full bg-slate-50 text-xs pl-8 pr-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -190,7 +234,10 @@ export const AuthModal: React.FC = () => {
                 {authModalMode === 'login' && (
                   <button
                     type="button"
-                    onClick={() => setAuthModalMode('forgot')}
+                    onClick={() => {
+                      setModalError(null);
+                      setAuthModalMode('forgot');
+                    }}
                     className="text-[11px] text-blue-600 hover:underline font-semibold"
                   >
                     Forgot?
@@ -214,10 +261,12 @@ export const AuthModal: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-sm rounded-xl shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition transform hover:-translate-y-0.5"
+            className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-sm rounded-xl shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition transform hover:-translate-y-0.5 disabled:opacity-50"
           >
             <span>
-              {authModalMode === 'login'
+              {loading
+                ? 'Processing...'
+                : authModalMode === 'login'
                 ? 'Sign In'
                 : authModalMode === 'register'
                 ? 'Create Account'
@@ -233,7 +282,10 @@ export const AuthModal: React.FC = () => {
             <p>
               Don't have an account?{' '}
               <button
-                onClick={() => setAuthModalMode('register')}
+                onClick={() => {
+                  setModalError(null);
+                  setAuthModalMode('register');
+                }}
                 className="font-bold text-blue-600 hover:underline"
               >
                 Sign Up
@@ -243,7 +295,10 @@ export const AuthModal: React.FC = () => {
             <p>
               Already have an account?{' '}
               <button
-                onClick={() => setAuthModalMode('login')}
+                onClick={() => {
+                  setModalError(null);
+                  setAuthModalMode('login');
+                }}
                 className="font-bold text-blue-600 hover:underline"
               >
                 Log In

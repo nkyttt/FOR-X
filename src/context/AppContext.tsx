@@ -69,7 +69,8 @@ export type AppView =
   | 'checkout'
   | 'admin'
   | 'security'
-  | 'search';
+  | 'search'
+  | 'auth';
 
 export interface ActiveRoute {
   name: AppView;
@@ -256,6 +257,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const getInitialViewFromPath = (): AppView => {
   if (typeof window !== 'undefined') {
     const path = window.location.pathname.toLowerCase();
+    if (path === '/auth' || path.startsWith('/auth')) return 'auth';
     if (path === '/community' || path.startsWith('/community')) return 'community';
     if (path === '/games' || path.startsWith('/games')) return 'games';
     if (path === '/videos' || path.startsWith('/videos')) return 'videos';
@@ -728,7 +730,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname.toLowerCase();
-      if (path === '/community' || path.startsWith('/community')) {
+      if (path === '/auth' || path.startsWith('/auth')) {
+        setCurrentView('auth');
+      } else if (path === '/community' || path.startsWith('/community')) {
         setCurrentView('community');
       } else if (path === '/games' || path.startsWith('/games')) {
         setCurrentView('games');
