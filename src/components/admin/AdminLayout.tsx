@@ -19,6 +19,7 @@ import {
   Activity,
   User,
   Sparkles,
+  Users,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -27,23 +28,30 @@ interface AdminLayoutProps {
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
-  const { adminSection, setAdminSection, navigate, playUiSound, showToast } = useApp();
+  const { currentView, adminSection, setAdminSection, navigate, playUiSound, showToast } = useApp();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [adminSearch, setAdminSearch] = useState('');
 
-  const menuItems: { id: AdminSection; label: string; icon: any; countKey?: string }[] = [
+  const menuItems: { id: AdminSection | 'community'; label: string; icon: any; countKey?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'community', label: 'Community', icon: Users },
     { id: 'categories', label: 'Categories', icon: FolderTree },
     { id: 'products', label: 'Products', icon: Package },
     { id: 'videos', label: 'Store Videos', icon: Film },
     { id: 'store', label: 'Store & Banners CMS', icon: Store },
     { id: 'theme', label: 'Theme Customizer', icon: Palette },
     { id: 'media', label: 'Media Library', icon: ImageIcon },
+    { id: 'health', label: 'System Health & Debug', icon: Activity },
     { id: 'settings', label: 'Admin & Cloud Settings', icon: Settings },
   ];
 
-  const handleNav = (id: AdminSection) => {
+  const handleNav = (id: AdminSection | 'community') => {
     playUiSound('click');
+    if (id === 'community') {
+      navigate('community');
+      setMobileSidebarOpen(false);
+      return;
+    }
     setAdminSection(id);
     setMobileSidebarOpen(false);
   };
@@ -132,19 +140,24 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
             {menuItems.map((item) => {
               const Icon = item.icon;
-              const isActive = adminSection === item.id;
+              const isCommunityActive = item.id === 'community' && (currentView === 'community' || (typeof window !== 'undefined' && window.location.pathname.toLowerCase() === '/community'));
+              const isActive = item.id === 'community' ? isCommunityActive : (adminSection === item.id && currentView === 'admin');
               return (
                 <button
                   key={item.id}
+                  id={`sidebar-${item.id}-button`}
                   onClick={() => handleNav(item.id)}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition text-left ${
                     isActive
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/20'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/20 ring-1 ring-white/20'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                   }`}
                 >
                   <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                   <span className="flex-1">{item.label}</span>
+                  {isActive && (
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400/50" />
+                  )}
                 </button>
               );
             })}

@@ -13,10 +13,12 @@ import {
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 interface AuthContextType {
+  user: UserProfile | null;
   currentUser: UserProfile | null;
   firebaseUser: FirebaseUser | null;
   googleAccessToken: string | null;
   loading: boolean;
+  login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   loginWithGoogle: () => Promise<boolean>;
   loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   registerWithEmail: (name: string, username: string, email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
@@ -313,10 +315,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider
       value={{
+        user: currentUser,
         currentUser,
         firebaseUser,
         googleAccessToken,
         loading,
+        login: loginWithEmail,
         loginWithGoogle,
         loginWithEmail,
         registerWithEmail,

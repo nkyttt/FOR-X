@@ -51,6 +51,20 @@ const MainContent: React.FC = () => {
     );
   }
 
+  // Dedicated Full-Page Modern Dark Social Experience for Community
+  if (viewName === 'community') {
+    return (
+      <div className="min-h-screen bg-[#0B0E14] text-slate-100 font-sans selection:bg-blue-600 selection:text-white">
+        <CommunityView />
+        <ToastContainer />
+        <AuthModal />
+        <GlobalMiniChat />
+        <GameDetailModal />
+        <VideoPlayerModal />
+      </div>
+    );
+  }
+
   const renderCurrentView = () => {
     switch (viewName) {
       case 'home':

@@ -64,19 +64,47 @@ export interface GameItem {
   minigameType?: 'shooter' | 'racer' | 'runner' | 'arena';
 }
 
+export type VideoUploadState =
+  | 'idle'
+  | 'selecting'
+  | 'uploading'
+  | 'paused'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'incomplete_db';
+
 export interface VideoItem {
   id: string;
   title: string;
   creator: string;
   thumbnail: string;
   videoUrl: string;
-  views: string;
+  views: string | number;
   duration: string;
-  category: 'Trailers' | 'Gameplay' | 'Tutorials' | 'Esports' | 'Developer' | 'Community';
+  category: 'Trailers' | 'Gameplay' | 'Tutorials' | 'Esports' | 'Developer' | 'Community' | string;
   publishedAt: string;
   description: string;
   isFeatured?: boolean;
   likes: number;
+  tags?: string[];
+  fileSizeFormatted?: string;
+  resolution?: string;
+  fps?: number;
+  codec?: string;
+  width?: number;
+  height?: number;
+  is4K?: boolean;
+  originalFileName?: string;
+  bitrateFormatted?: string;
+  format?: string;
+  price?: number;
+  discount?: number;
+  isFree?: boolean;
+  status?: 'Draft' | 'Published' | 'Archived';
+  storagePath?: string;
+  adminUploaderEmail?: string;
 }
 
 export interface NewsItem {
@@ -283,15 +311,55 @@ export interface StoreProduct {
 
 export interface StoreVideo {
   id: string;
+  videoId?: string;
   title: string;
   description?: string;
   videoUrl: string;
   thumbnailUrl?: string;
+  storagePath?: string;
+  thumbnailPath?: string;
+  thumbnailStoragePath?: string;
+  originalFileName?: string;
+  mimeType?: string;
+  format?: string;
+  container?: string;
+  width?: number;
+  height?: number;
+  resolution?: string;
+  fps?: number;
+  codec?: string;
+  bitrate?: number;
+  bitrateFormatted?: string;
+  is4K?: boolean;
+  category: string;
+  tags?: string[];
+  duration?: number;
+  durationFormatted?: string;
+  fileSize?: number;
+  fileSizeFormatted?: string;
+  processingStatus?: 'Uploaded' | 'Processing' | 'Ready' | 'Failed';
+  uploadStatus?: 'Idle' | 'Uploading' | 'Paused' | 'Uploaded' | 'Failed' | 'Cancelled';
+  visibility?: 'Public' | 'Unlisted' | 'Private';
+  price?: number;
+  discount?: number;
+  isFree: boolean;
+  published?: boolean;
+  status: 'Draft' | 'Published' | 'Archived';
   active: boolean;
   featured?: boolean;
   displayOrder?: number;
+  views?: number;
+  likes?: number;
+  likedBy?: string[];
+  uploadDate?: string;
   createdAt?: string;
   updatedAt?: string;
+  uploadedBy?: string;
+  adminUploaderId?: string;
+  adminUploaderEmail?: string;
+  protectedContent?: boolean;
+  purchasedBy?: string[];
+  browserPlaybackSupported?: boolean;
 }
 
 export interface BannerItem {

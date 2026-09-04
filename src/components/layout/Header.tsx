@@ -23,6 +23,7 @@ import { useCart } from '../../context/CartContext';
 import { useApp, AppView } from '../../context/AppContext';
 import { NotificationDropdown } from './NotificationDropdown';
 import { GamingTimerSet } from './GamingTimerSet';
+import { GlobalCreateNewButton } from './GlobalCreateNewButton';
 
 export const Header: React.FC = () => {
   const { currentUser, logout, switchDemoRole } = useAuth();
@@ -107,14 +108,15 @@ export const Header: React.FC = () => {
         {/* Center: Desktop Navigation */}
         <nav className="hidden lg:flex items-center space-x-1">
           {navItems.map((item) => {
-            const isActive = currentView === item.view;
+            const isActive = currentView === item.view || (item.view === 'community' && typeof window !== 'undefined' && window.location.pathname.toLowerCase() === '/community');
             return (
               <button
                 key={item.view}
+                id={`nav-${item.view}-button`}
                 onClick={() => handleNavClick(item.view)}
                 className={`relative px-4 py-2 text-sm font-semibold transition-all duration-200 rounded-lg ${
                   isActive
-                    ? 'text-blue-600 font-bold'
+                    ? 'text-blue-600 font-bold bg-blue-50/60'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
@@ -161,6 +163,9 @@ export const Header: React.FC = () => {
           >
             <Search className="w-5 h-5" />
           </button>
+
+          {/* Global Role-Gated Create New Button */}
+          <GlobalCreateNewButton />
 
           {/* AI Tactical Mastermind Trigger */}
           <button
@@ -375,18 +380,22 @@ export const Header: React.FC = () => {
             </button>
           </form>
 
-          {navItems.map((item) => (
-            <button
-              key={item.view}
-              onClick={() => handleNavClick(item.view)}
-              className={`w-full text-left px-4 py-3 rounded-xl text-base font-bold flex items-center justify-between ${
-                currentView === item.view ? 'bg-blue-50 text-blue-600' : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <span>{item.label}</span>
-              {currentView === item.view && <span className="w-2 h-2 rounded-full bg-blue-600" />}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const isActive = currentView === item.view || (item.view === 'community' && typeof window !== 'undefined' && window.location.pathname.toLowerCase() === '/community');
+            return (
+              <button
+                key={item.view}
+                id={`sidebar-nav-${item.view}-button`}
+                onClick={() => handleNavClick(item.view)}
+                className={`w-full text-left px-4 py-3 rounded-xl text-base font-bold flex items-center justify-between transition ${
+                  isActive ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600' : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <span>{item.label}</span>
+                {isActive && <span className="w-2 h-2 rounded-full bg-blue-600" />}
+              </button>
+            );
+          })}
 
           <button
             onClick={() => {

@@ -129,6 +129,50 @@
         "isSystem": { "type": "boolean" }
       },
       "required": ["userId", "username", "content", "channel"]
+    },
+    "post": {
+      "title": "Post",
+      "description": "Community feed post with text and optional media",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "text": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "mediaType": { "type": "string" },
+        "gameTag": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["authorId", "text"]
+    },
+    "postLike": {
+      "title": "PostLike",
+      "description": "User like on a community post",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId"]
+    },
+    "postComment": {
+      "title": "PostComment",
+      "description": "User comment on a community post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "text"]
     }
   },
   "firestore": {
@@ -159,6 +203,18 @@
     "/global_chat_messages/{messageId}": {
       "schema": { "$ref": "globalChatMessage" },
       "description": "Real-time global gaming community chat messages"
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "post" },
+      "description": "Real Firestore community posts"
+    },
+    "/posts/{postId}/likes/{userId}": {
+      "schema": { "$ref": "postLike" },
+      "description": "Real Firestore likes on community post"
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": { "$ref": "postComment" },
+      "description": "Real Firestore comments on community post"
     }
   }
 }

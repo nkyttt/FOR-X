@@ -11,6 +11,7 @@ import { AdminStoreCMS } from '../components/admin/AdminStoreCMS';
 import { AdminTheme } from '../components/admin/AdminTheme';
 import { AdminMediaLibrary } from '../components/admin/AdminMediaLibrary';
 import { AdminSettings } from '../components/admin/AdminSettings';
+import { AdminSystemHealth } from '../components/admin/AdminSystemHealth';
 
 export const AdminView: React.FC = () => {
   const { user, loading } = useAuth();
@@ -56,6 +57,8 @@ export const AdminView: React.FC = () => {
         return <AdminTheme />;
       case 'media':
         return <AdminMediaLibrary />;
+      case 'health':
+        return <AdminSystemHealth />;
       case 'settings':
         return <AdminSettings />;
       default:

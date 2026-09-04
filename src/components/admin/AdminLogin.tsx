@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
+import { auth } from '../../lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import {
   Lock,
   Mail,
@@ -11,6 +13,9 @@ import {
   ArrowRight,
   Sparkles,
   Terminal,
+  KeyRound,
+  CheckCircle2,
+  X,
 } from 'lucide-react';
 
 export const AdminLogin: React.FC = () => {
@@ -22,6 +27,13 @@ export const AdminLogin: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Forgot Password State
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+  const [forgotError, setForgotError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +72,42 @@ export const AdminLogin: React.FC = () => {
       setErrorMessage(message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSendResetEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+    setForgotSuccess(null);
+
+    if (!forgotEmail.trim()) {
+      setForgotError('Please enter the administrator email address.');
+      return;
+    }
+
+    setForgotLoading(true);
+    playUiSound('click');
+
+    try {
+      if (auth) {
+        await sendPasswordResetEmail(auth, forgotEmail.trim());
+      }
+      setForgotSuccess(`Password reset email successfully sent to ${forgotEmail}. Please check your inbox.`);
+      playUiSound('success');
+      showToast('Reset Link Sent', 'Check your administrator email for password reset instructions.');
+    } catch (err: any) {
+      console.error('Forgot password error:', err);
+      let msg = 'Failed to send password reset email.';
+      if (err?.code === 'auth/user-not-found') {
+        msg = 'No administrator account found with this email address.';
+      } else if (err?.code === 'auth/invalid-email') {
+        msg = 'Invalid email address format.';
+      } else if (err?.message) {
+        msg = err.message;
+      }
+      setForgotError(msg);
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -109,6 +157,7 @@ export const AdminLogin: React.FC = () => {
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                id="admin-email-input"
                 type="email"
                 required
                 value={email}
@@ -120,12 +169,27 @@ export const AdminLogin: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-              Password
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                Password
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotEmail(email);
+                  setForgotError(null);
+                  setForgotSuccess(null);
+                  setIsForgotModalOpen(true);
+                }}
+                className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+              >
+                Forgot Password?
+              </button>
+            </div>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                id="admin-password-input"
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
@@ -145,6 +209,7 @@ export const AdminLogin: React.FC = () => {
           </div>
 
           <button
+            id="admin-login-submit-btn"
             type="submit"
             disabled={isLoading || authLoading}
             className="w-full mt-2 py-3.5 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold rounded-xl shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition transform active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
@@ -182,6 +247,90 @@ export const AdminLogin: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {isForgotModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative text-slate-100">
+            <button
+              onClick={() => setIsForgotModalOpen(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-xl transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Reset Admin Password</h3>
+                <p className="text-xs text-slate-400">Send password recovery link via Firebase Auth.</p>
+              </div>
+            </div>
+
+            {forgotError && (
+              <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{forgotError}</span>
+              </div>
+            )}
+
+            {forgotSuccess ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-300 text-xs flex items-start gap-2.5">
+                  <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" />
+                  <span className="leading-relaxed">{forgotSuccess}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsForgotModalOpen(false)}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition"
+                >
+                  Return to Sign In
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSendResetEmail} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                    Registered Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="admin@cyberx.gg"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-600 outline-none transition"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 rounded-xl transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="px-5 py-2 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 rounded-xl shadow-lg shadow-blue-600/30 transition disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {forgotLoading ? (
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <span>Send Reset Link</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -208,12 +208,29 @@ export const AdminProducts: React.FC = () => {
     }
 
     if (!formData.categoryId) {
-      setFormError('Please select a valid category.');
+      setFormError('Please select a valid category from existing categories.');
       return;
     }
 
-    if (!formData.affiliateLink.trim()) {
+    if (!formData.imageUrl || !formData.imageUrl.trim()) {
+      setFormError('Product image is required. Please upload an image or provide a valid image URL.');
+      return;
+    }
+
+    const trimmedAffiliate = formData.affiliateLink.trim();
+    if (!trimmedAffiliate) {
       setFormError('Affiliate Buy Now link is required.');
+      return;
+    }
+
+    try {
+      const parsedUrl = new URL(trimmedAffiliate);
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        setFormError('Affiliate link must start with http:// or https://');
+        return;
+      }
+    } catch {
+      setFormError('Affiliate link must be a well-formed, valid URL (e.g. https://amazon.com/dp/...)');
       return;
     }
 

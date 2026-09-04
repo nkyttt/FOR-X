@@ -92,6 +92,7 @@ export type AdminSection =
   | 'theme'
   | 'media'
   | 'settings'
+  | 'health'
   | 'login';
 
 interface AppContextType {
@@ -162,9 +163,10 @@ interface AppContextType {
 
   storeVideos: StoreVideo[];
   setStoreVideos: React.Dispatch<React.SetStateAction<StoreVideo[]>>;
-  addStoreVideo: (video: Omit<StoreVideo, 'id' | 'createdAt'>) => Promise<StoreVideo>;
+  addStoreVideo: (video: Omit<StoreVideo, 'id' | 'createdAt'>) => Promise<StoreVideo & { dbSuccess?: boolean; dbError?: string }>;
   updateStoreVideo: (id: string, updates: Partial<StoreVideo>) => Promise<void>;
   deleteStoreVideo: (id: string) => Promise<boolean>;
+  retrySaveVideoToFirestore: (video: StoreVideo) => Promise<{ success: boolean; error?: string }>;
   toggleVideoActive: (id: string) => Promise<void>;
   toggleVideoFeatured: (id: string) => Promise<void>;
 
@@ -251,8 +253,28 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const getInitialViewFromPath = (): AppView => {
+  if (typeof window !== 'undefined') {
+    const path = window.location.pathname.toLowerCase();
+    if (path === '/community' || path.startsWith('/community')) return 'community';
+    if (path === '/games' || path.startsWith('/games')) return 'games';
+    if (path === '/videos' || path.startsWith('/videos')) return 'videos';
+    if (path === '/gallery' || path.startsWith('/gallery')) return 'gallery';
+    if (path === '/news' || path.startsWith('/news')) return 'news';
+    if (path === '/tournaments' || path.startsWith('/tournaments')) return 'tournaments';
+    if (path === '/shop' || path.startsWith('/shop')) return 'shop';
+    if (path === '/checkout' || path.startsWith('/checkout')) return 'checkout';
+    if (path === '/dashboard' || path.startsWith('/dashboard')) return 'dashboard';
+    if (path === '/rewards' || path.startsWith('/rewards')) return 'rewards';
+    if (path === '/admin' || path.startsWith('/admin')) return 'admin';
+    if (path === '/security' || path.startsWith('/security')) return 'security';
+    if (path === '/search' || path.startsWith('/search')) return 'search';
+  }
+  return 'home';
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentView, setCurrentView] = useState<AppView>('home');
+  const [currentView, setCurrentView] = useState<AppView>(getInitialViewFromPath);
   const [adminSection, setAdminSection] = useState<AdminSection>('dashboard');
   const [adminActionItemId, setAdminActionItemId] = useState<string | null>(null);
 
@@ -566,6 +588,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       );
 
+      const unsubAuditLogs = onSnapshot(
+        collection(db, 'auditLogs'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const items = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as AuditLog));
+            setAuditLogs(items);
+          }
+        },
+        (error) => {
+          console.warn('Firestore auditLogs sync offline/skipped:', error.message);
+        }
+      );
+
       return () => {
         unsubCategories();
         unsubProducts();
@@ -574,11 +609,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubStoreSettings();
         unsubThemeSettings();
         unsubChat();
+        unsubAuditLogs();
       };
     } catch (e) {
       console.warn('Firestore initialization error:', e);
     }
   }, []);
+
+  // Synchronize storeVideos into customer videos collection in real time
+  useEffect(() => {
+    if (storeVideos && storeVideos.length > 0) {
+      const activeVideos = storeVideos.filter((sv) => sv.status === 'Published' || sv.active !== false);
+      const mapped: VideoItem[] = activeVideos.map((sv) => ({
+        id: sv.id,
+        title: sv.title,
+        creator: sv.adminUploaderEmail ? sv.adminUploaderEmail.split('@')[0] : 'CYBERX Admin',
+        thumbnail: sv.thumbnailUrl || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80',
+        videoUrl: sv.videoUrl,
+        views: typeof sv.views === 'number' ? `${sv.views.toLocaleString()} views` : (sv.views || '0 views'),
+        duration: sv.durationFormatted || '00:00',
+        category: (sv.category as any) || 'Trailers',
+        publishedAt: sv.uploadDate ? new Date(sv.uploadDate).toLocaleDateString() : 'Recently',
+        description: sv.description || '',
+        isFeatured: sv.featured,
+        likes: sv.likes ?? 0,
+        tags: sv.tags,
+        fileSizeFormatted: sv.fileSizeFormatted,
+        resolution: sv.resolution,
+        fps: sv.fps,
+        codec: sv.codec,
+        width: sv.width,
+        height: sv.height,
+        is4K: sv.is4K,
+        originalFileName: sv.originalFileName,
+        bitrateFormatted: sv.bitrateFormatted,
+        format: sv.format,
+        price: sv.price,
+        discount: sv.discount,
+        isFree: sv.isFree,
+        status: sv.status,
+        storagePath: sv.storagePath,
+        adminUploaderEmail: sv.adminUploaderEmail,
+      }));
+      setVideos(mapped);
+    }
+  }, [storeVideos]);
 
   const showToast = (
     title: string,
@@ -649,9 +724,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   };
 
+  // Synchronize browser history and popstate navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.toLowerCase();
+      if (path === '/community' || path.startsWith('/community')) {
+        setCurrentView('community');
+      } else if (path === '/games' || path.startsWith('/games')) {
+        setCurrentView('games');
+      } else if (path === '/videos' || path.startsWith('/videos')) {
+        setCurrentView('videos');
+      } else if (path === '/gallery' || path.startsWith('/gallery')) {
+        setCurrentView('gallery');
+      } else if (path === '/news' || path.startsWith('/news')) {
+        setCurrentView('news');
+      } else if (path === '/tournaments' || path.startsWith('/tournaments')) {
+        setCurrentView('tournaments');
+      } else if (path === '/shop' || path.startsWith('/shop')) {
+        setCurrentView('shop');
+      } else if (path === '/checkout' || path.startsWith('/checkout')) {
+        setCurrentView('checkout');
+      } else if (path === '/dashboard' || path.startsWith('/dashboard')) {
+        setCurrentView('dashboard');
+      } else if (path === '/rewards' || path.startsWith('/rewards')) {
+        setCurrentView('rewards');
+      } else if (path === '/admin' || path.startsWith('/admin')) {
+        setCurrentView('admin');
+      } else if (path === '/security' || path.startsWith('/security')) {
+        setCurrentView('security');
+      } else if (path === '/search' || path.startsWith('/search')) {
+        setCurrentView('search');
+      } else {
+        setCurrentView('home');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const navigate = (view: AppView, params?: Record<string, string>) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setCurrentView(view);
+    if (typeof window !== 'undefined') {
+      const targetPath = view === 'home' ? '/' : `/${view}`;
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState(null, '', targetPath);
+      }
+    }
     if (params) {
       if (params.gameId) setSelectedGameId(params.gameId);
       if (params.newsSlug) setSelectedNewsSlug(params.newsSlug);
@@ -811,25 +930,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // --- Store Video CRUD ---
-  const addStoreVideo = async (vidData: Omit<StoreVideo, 'id' | 'createdAt'>): Promise<StoreVideo> => {
-    const id = `vid-${Date.now()}`;
+  const addStoreVideo = async (
+    vidData: Omit<StoreVideo, 'id' | 'createdAt'>
+  ): Promise<StoreVideo & { dbSuccess?: boolean; dbError?: string }> => {
+    const id = vidData.videoId || `vid-${Date.now()}`;
     const newVid: StoreVideo = {
       ...vidData,
       id,
+      videoId: id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     setStoreVideos((prev) => [...prev, newVid]);
+    let dbSuccess = false;
+    let dbError: string | undefined;
     try {
       if (db) {
         await setDoc(doc(db, 'videos', id), newVid);
+        dbSuccess = true;
+      } else {
+        dbError = 'Firestore database client unavailable';
       }
-    } catch (e) {
-      console.warn('Firestore video write fallback to local', e);
+    } catch (e: any) {
+      console.warn('Firestore video document write failed:', e);
+      dbError = e?.message || 'Firestore permission or network error';
     }
-    addAuditLog('CREATE_VIDEO', newVid.title, `Uploaded video asset "${newVid.title}"`);
-    showToast('Video Added', `"${newVid.title}" published to video hub.`);
-    return newVid;
+    addAuditLog('CREATE_VIDEO', newVid.title, `Uploaded video asset "${newVid.title}" (DB: ${dbSuccess ? 'OK' : 'Failed'})`);
+    if (dbSuccess) {
+      showToast('Video Published', `"${newVid.title}" published to video hub.`);
+    }
+    return { ...newVid, dbSuccess, dbError };
+  };
+
+  const retrySaveVideoToFirestore = async (video: StoreVideo): Promise<{ success: boolean; error?: string }> => {
+    try {
+      if (db) {
+        await setDoc(doc(db, 'videos', video.id), {
+          ...video,
+          processingStatus: 'Ready',
+          updatedAt: new Date().toISOString(),
+        });
+        setStoreVideos((prev) =>
+          prev.map((v) => (v.id === video.id ? { ...v, processingStatus: 'Ready' } : v))
+        );
+        showToast('Firestore Synchronized', `"${video.title}" metadata successfully saved to database.`);
+        return { success: true };
+      }
+      return { success: false, error: 'Database service unavailable' };
+    } catch (err: any) {
+      console.error('Retry save to Firestore failed:', err);
+      return { success: false, error: err?.message || 'Database write error' };
+    }
   };
 
   const updateStoreVideo = async (id: string, updates: Partial<StoreVideo>) => {
@@ -1168,8 +1319,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addAuditLog = (action: string, target: string, details: string, email = 'admin@cyberx.gg') => {
+    const id = `log-${Date.now()}`;
     const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
+      id,
       adminEmail: email,
       action,
       target,
@@ -1177,6 +1329,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       details,
     };
     setAuditLogs((prev) => [newLog, ...prev]);
+    try {
+      if (db) {
+        setDoc(doc(db, 'auditLogs', id), newLog).catch((e) => {
+          console.warn('Firestore auditLog write queued locally:', e);
+        });
+      }
+    } catch {}
   };
 
   const unreadNotificationsCount = notifications.filter((n) => !n.isRead).length;
@@ -1329,6 +1488,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addStoreVideo,
         updateStoreVideo,
         deleteStoreVideo,
+        retrySaveVideoToFirestore,
         toggleVideoActive,
         toggleVideoFeatured,
         banners,
